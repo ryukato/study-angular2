@@ -1,10 +1,187 @@
-# Webpack
-Application 개발 시, Javascript module을 build하는 기능을 제공하는 Tool이다. 각 Javascript파일의 import구문과 각 파일간 dependency를 분석하여 하나의 module 파일로 생성하는 기능을 제공한다.
-
-그리고 아래와 같은 기능을 제공한다. 
+# [Webpack](https://webpack.js.org)
+Application 개발 시, Javascript module을 build하는 기능을 제공하는 Tool이다. 각 Javascript파일의 import구문과 각 파일간 dependency를 분석하여 하나의 module 파일로 생성하는 기능을 제공한다. 그리고 아래와 같은 기능을 제공한다. 
 * constructing a dependency graph
 * customising optimizations to application code
 * Running a development server (* hot re-loading)
+
+또한 Webpack 세세한 설정을 할 수 있도록 지원하지만 아래의 기본 개념은 알고 있어야 한다.
+
+## Concepts
+### [Entry](https://webpack.js.org/concepts/#entry)
+Webpack은 application code를 분석하여 의존관계를 분석한다. 이때 의존 관계를 분석하기 위한 시작점이 entry point이며, 이를 지정하기 위해 **entry**를 사용 및 설정한다.
+
+#### Syntax
+```entry: {[entryChunkName string]: string|Arrat<string>}```
+
+
+###### webpack.config.js (single entry)
+```
+const config = {
+	entry: './path/to/my/entry/file.js'
+}
+module.exports = config;
+```
+
+###### webpack.config.js (multi entry)
+```
+const config = {
+	entry: ['./path1/to/my/entry/file.js', './path2/to/my/entry/file.js']
+}
+module.exports = config;
+```
+
+###### webpack.config.js (multi entry)
+```
+const config = {
+	entry: {
+		app: './src/app.js',
+		vendors: './src/vendors.js' // --> starting from vendors.js, creates chunk file includes all dependent files
+	}
+}
+module.exports = config;
+```
+
+#### Multi Page application
+CommonsChunkPlugin을 사용하면 각 페이지별가 공통으로 사용하는 코드를 뽑아내서 별도의 bundle로 만들 수 있다. 
+###### webpack.config.js
+
+```
+const config = {
+	entry: {
+		pageOne: './src/pageOne/index.js',
+		pageTwo: './src/pageTwo/index.js',
+		pageThree: './src/pageThree/index.js',
+	}
+}
+```
+
+### [Output](https://webpack.js.org/concepts/#output)
+```output```option은 compile된 파일들을 어디에, 어떤 파일명으로 저장해야 하는지를 설정하도록 한다. 단 여러개의 entry가 있을 수 있지만 output은 하나만 존재한다. 
+
+```OccurenceOrderPlugin ```혹은 ```recordsPath```를 사용하면 모듈간 일정한 순서를 보장할 수 있다. 
+
+#### Syntax
+
+```
+output: {
+	filename: 'bundle.js',
+	path: '/home/proj/public/assets'
+}
+```
+
+###### webpack.config.js (with single entry)
+```
+const path = require('path'); //nodeJs의 path모듈 import
+
+module.exports = {
+	entry: '.path/to/my/entry/file.js',
+	output: {
+		path: path.resolve(__dirname, 'dist'), // --> [project path]/dist
+		filename: 'my-first-webpack.bundle.js'
+	}
+};
+```
+
+###### webpack.config.js (multi entries)
+
+```
+const config = {
+  entry: {
+    app: './src/app.js',
+    search: './src/search.js'
+  },
+  output: {
+    filename: '[name].js',  // name will be 'app' and 'search'
+    path: __dirname + '/build'
+  }
+}
+
+module.exports = config;
+```
+
+#### More options
+[output more options](https://webpack.js.org/concepts/output/#options)
+
+### [Loader](https://webpack.js.org/concepts/#loaders)
+Webapck은 Javascript로 작성되어야 하지만, 대부분의 웹 자원(.css, .html, .scss, .jpg...)들을 다룰 수 있다. 이때 **Loader**는 이런 파일들을 그들의 의존관계에 따라 모듈로 구성할 수 있다. 그러기 위해선 각 loader별로 다룰 수 있는 파일인지 여부(test)와 어떻게 bundle로 구성할지(use)를 지정해 주어야 한다.
+
+###### webpack.config.js
+
+```
+const path = require('path');
+
+const config = {
+	entry: './path/to/my/entry/file.js',
+	output: {
+		path: path.resove(__dirname, 'dist'),
+		filename: 'my-first-webpack.bundle.js'
+	},
+	module: { 
+		rules: [
+			{
+				test: /\.(js|jsx)$/, // 정규식을 사용하여 js, jsx 파일 확장자를 가진 파일을 모두 골라낸다.
+				use: 'babel-loader' //위의 파일들을 loading하기 위해 babel-loader를 사용한다.
+			}
+		]
+	}
+};
+
+module.exports = config;
+```
+*NOTE* ```Loader를 선언할때 loaders 혹은 rules로 바로 선언하는 것이 아닌, ```**modules**```하위에 선언하는 것에 유의해야 한다.```
+
+#### Loaders
+* css: css-loader
+* typescript: ts-loader
+* jade: jade-loader
+* json: json-loader
+
+###### webpack.config.js
+
+```
+const config = {
+	module: {
+		rules: [
+			{
+				test: /\.css$/, loader: 'css-loader'
+			},
+			{
+				test: /\.css$/, use: 'css-loader'
+			},
+			{
+				test: /\.css$/,
+				use: [
+					{ loader: 'style-loader' },
+					{
+						loader: 'css-loader',
+						options: {
+							modules: true
+						}
+					}
+				]
+			},
+		]
+	}
+};
+module.exports = config;
+```
+###### require statement
+
+```
+require('style-loader!css-loader?modules!./styles/css');
+```
+###### cli commands
+
+```
+webpack --module-bind jade-loader --module-bind 'css=style-loader!css-loader'
+```
+.css file -> loaded by style-loader and css-loader, jade file -> loaded by jade-loader
+
+#### [Loader Features](https://webpack.js.org/concepts/loaders/#loader-features)
+#### [Resolving Loaders](https://webpack.js.org/concepts/loaders/#resolving-loaders)
+
+### [Plugins](https://webpack.js.org/concepts/#plugins)
+
 
 ## 설치
 webpack을 설치하기 위해선 먼저 node 및 npm(node package manager)가 설치되어 있어야 한다.
