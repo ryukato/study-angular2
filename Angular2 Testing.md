@@ -132,7 +132,7 @@ describe('BannerComponent (inline template)', () => {
 ```
 
 #### 테스트 내용
-* BannerInlineComponent 객체가 가진 title속성이 정상적으로 <h1>태그 안에 들어갔는지를 검증한다. 
+* BannerInlineComponent 객체가 가진 title속성이 정상적으로 \<h1\>태그 안에 들어갔는지를 검증한다. 
 
 #### 테스트 코드 설명
 ##### TestBed
