@@ -253,7 +253,131 @@ TestBed.compileComponents()
 ```
 	 
 ### 의존관계를 가지는 Component 테스트
-	
+일반적으로 Component는 특정 service객체에 대한 의존성을 가지게 된다. 이런 경우 어떻게 테스트를 하는지에 대해 알아보자.
+아래의 코드에서 보듯이, ```WelcomeComponent```	는```UserSerivce```에 대한 의존관계가 있고 ```UserSerivce```를 통해 현재 로그인한 사용자에 대한 정보를 가져온다.
+
+아래의 명령어를 통해 WelcomeComponent 및 UserService를 추가한다.
+
+```
+ng g component Welcome
+ng g service welcome/model/User
+```
+
+##### src/app/welcome.component.ts
+
+```
+import { Component, OnInit } from '@angular/core';
+import { UserService } from './model/user.service'
+@Component({
+  selector: 'app-welcome',
+  template: '<h3 class="welcome"><i>{{welcome}}</i></h3>',
+  styleUrls: ['./welcome.component.css']
+})
+export class WelcomeComponent implements OnInit {
+  welcome = '-- not initailized yet --';
+
+  constructor(private userService: UserService) {
+
+  }
+
+  ngOnInit() {
+    this.welcome = this.userService.isLoggedIn() ? 'Welcome, ' + this.userService.userName() : 'Please log in.';
+  }
+
+}
+
+```
+아래는 WelcomeComponent를 테스트하는 전체 코드이다.
+아래의 테스트 코드 중 UserService를 injection하는 코드는 아래와 같다.
+
+```
+userService = TestBed.get(UserService);
+```
+
+혹은
+
+```
+userService = fixture.debugElement.injector.get(UserService);
+```
+
+위의 방법은 test의 root injector를 통해 injection한다. 단 component가 provider를 override하는 경우에는 작동하지 않는다. [component-override](https://angular.io/docs/ts/latest/guide/testing.html#!#component-override) 참조
+
+##### src/app/welcome.component.spec.ts
+
+```
+/* tslint:disable:no-unused-variable */
+import { async, ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { DebugElement } from '@angular/core';
+
+import { WelcomeComponent } from './welcome.component';
+import { UserService } from './model/user.service';
+
+describe('WelcomeComponent', () => {
+  let component: WelcomeComponent;
+  let fixture: ComponentFixture<WelcomeComponent>;
+  let de: DebugElement;
+  let el: HTMLElement;
+  let userServiceStub;
+  let userService;
+  beforeEach(async(() => {
+    userServiceStub = {
+      isLoggedIn: function(){
+        return true;
+      },
+      userName: function(){
+        return 'Test User';
+      }
+    }
+
+    TestBed.configureTestingModule({
+      declarations: [ WelcomeComponent ],
+      // providers: [ UserService ] // No, Do NOT provide real UserService
+      providers: [ { provide: UserService, useValue: userServiceStub } ]
+    })
+    .compileComponents()
+    .then(() => {
+      fixture = TestBed.createComponent(WelcomeComponent);
+      component = fixture.componentInstance; // BannerComponent test instance
+      userService = TestBed.get(UserService);
+
+      de = fixture.debugElement.query(By.css('.welcome'));
+      el = de.nativeElement;
+    });
+    ;
+  }));
+
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  it('should welcome the user', () => {
+  fixture.detectChanges();
+  const content = el.textContent;
+  expect(content).toContain('Welcome', '"Welcome ..."');
+  expect(content).toContain('Test User', 'expected name');
+});
+
+it('should welcome "Test User"', () => {
+  userService.userName = function(){
+    return 'Bubba';
+  } // welcome message hasn't been shown yet
+  fixture.detectChanges();
+  expect(el.textContent).toContain('Bubba');
+});
+
+it('should request login if not logged in', () => {
+  userService.isLoggedIn = function(){
+    return false;
+  }; // welcome message hasn't been shown yet
+  fixture.detectChanges();
+  const content = el.textContent;
+  expect(content).not.toContain('Welcome', 'not welcomed');
+  expect(content).toMatch(/log in/i, '"log in"');
+});
+});
+
+```
 
 
 
