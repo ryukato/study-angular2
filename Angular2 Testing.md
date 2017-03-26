@@ -57,6 +57,10 @@ export class BannerComponent {
 }
 ```	
 ##### src/app/banner-inline.component.spec.ts
+ngOnInit 메서드는 component life cycle상의 init과 같은 이벤트를 처리하는 메서드로 Angular가 component 생성을 완료하였을때 호출되는 메서드 이다. 그런데 twain.service는 Promise를 반환하고 있고, 그 반환된 Promise를 twain.component에서 받아 처리하고 있다. 
+즉, twain.component의 생성이 완료된 다음에 Promise를 resolve하여 처리한다는 것이다. 
+그래서 .....
+
 
 ```
 /* tslint:disable:no-unused-variable */
@@ -379,6 +383,215 @@ it('should request login if not logged in', () => {
 
 ```
 
+### Async service 테스트 하기
+대부분의 Service들은 HTTP 요청을 보내고, 응답을 받아 처리하는 등의 비동기(async)한 처리를 많이 하게 된다. 이런 Service에 의존 관계를 가지는 Component가 있을 경우, 해당 Service에 대한 의존 관계를 테스트시에 잘 처리를 해줘야 Component를 격리된(Isolated)상태에서 테스트 할 수 있게 된다. 
+아래의 코드를 통해 비동기적인 작업을 처리하는 서비스에 의존 관계가 있는 Component를 테스트하는 방법을 살펴 보자
+
+###### src/app/shared/twain.component.ts
+```
+import { Component, OnInit } from '@angular/core';
+import { TwainService } from './twain.service';
+
+@Component({
+  selector: 'twain-quote',
+  templateUrl: './twain.component.html',
+  styleUrls: ['./twain.component.css']
+})
+export class TwainComponent implements OnInit {
+  intervalId: number;
+  quote = '...';
+
+  constructor(private twainService: TwainService) {
+    console.log('twain.component constructor is called.')
+  }
+
+  ngOnInit() {
+    console.log('twain.component onInit!!! before getQuote');
+    this.twainService.getQuote()
+    .then((quote) => {
+      console.log('twain.component resolve quote!!');
+      this.quote = quote;
+    });
+    console.log('twain.component onInit!!! after getQuote');
+  }
+
+}
+```
+###### src/app/shared/twain.component.spec.ts
+아래의 코드에서 유심히 봐야 할 것은 spy와 spyOn이다. spy와 spyOn을 통해 twain.component에 주입된 twainService의 특정 메서드가 호출을 감시하고 있다가, 해당 메서드가 호출되면 우리가 원하는 값을 반환하도록 할 수 있다. Java에서의 Mockito를 사용한 경험이 있다면 이와 비슷하다.
+
+```
+/* tslint:disable:no-unused-variable */
+import { async, ComponentFixture, TestBed, fakeAsync, tick} from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { DebugElement } from '@angular/core';
+
+import { HttpModule } from  '@angular/http';
+
+import { TwainComponent } from './twain.component';
+import { TwainService } from './twain.service';
+
+describe('TwainComponent', () => {
+  let component: TwainComponent;
+  let fixture: ComponentFixture<TwainComponent>;
+  let de: DebugElement;
+  let el: any;
+  let spy: any;
+  let twainService: TwainService;
+  let testQuote = 'test quote';
+  beforeEach(async(() => {
+    TestBed.configureTestingModule({
+      imports: [ HttpModule ],
+      declarations: [ TwainComponent ],
+      providers: [ TwainService ]
+    })
+    .compileComponents()
+    .then(() => {
+      fixture = TestBed.createComponent(TwainComponent);
+      component = fixture.componentInstance;
+      twainService = fixture.debugElement.injector.get(TwainService);
+      spy = spyOn(twainService, 'getQuote')
+      .and
+      .callFake(() => {
+        console.log('spy twain.service getQuote is called!');
+        return Promise.resolve(testQuote);
+      })
+
+      de = fixture.debugElement.query(By.css('.twain'));
+      el = de.nativeElement;
+    });
+  }));
+
+  // synchrnous test
+  it('should create', () => {
+    expect(component).toBeTruthy();
+  });
+
+  // synchrnous test
+  it('should not show quote before OnInit', () => {
+    expect(el.textContent).toBe('', 'nothing displayed');
+    expect(spy.calls.any()).toBe(false, 'getQuote not yet called');
+  });
+
+  // synchrnous test
+  it('should still not show quote after component initialized', () => {
+    fixture.detectChanges();
+    // getQuote service is async => still has not returned with quote
+    expect(el.textContent).toBe('...', 'no quote yet');
+    expect(spy.calls.any()).toBe(true, 'getQuote called');
+  });
+});
+```
+#### synchronous test
+``` // synchrnous test ``` 주석으로 표시된 it 메서드들은  모두 동기적으로 twain.component를 테스트하는 테스트 케이스들이다. 이들 테스트 케이스을 가지고는 component에 quote가 표시되는지를 테스트 할 수 없다. 그 이유는 twain.service혹은 twain.service를 spy하는 spy객체로부터 quote가 아직 반환되지 않았기 때문이다. ```npm run test```혹은 ```ng test```를 통해 테스트를 수행하면 아래와 같은 로그가 표시되는 것을 확인할 수 있다. 
+
+표시된 로그를 유심히 살펴 보면 **ngOnInit** 메서드 후에 service로 반환된 promise가 resolve되어 quote를 반환한 것을 확인 할 수 있다.
+즉, quote가 정상적으로 표시되는 것을 확인하기 위해선 테스트 케이스는 반드시 비동기(asynchronous)해야 한다.
+
+```
+LOG: 'twain.component constructor is called.'
+LOG: 'twain.component onInit!!! before getQuote'
+LOG: 'spy twain.service getQuote is called!'
+LOG: 'twain.component onInit!!! after getQuote'
+LOG: 'twain.component resolve quote!!'
+```
+
+#### asynchronous test
+아래의 두 테스트 케이스 메서드를 twain.component.spec.ts에 추가한다. 그리고 it 함수에 전달되는 두번째 인자가 **async**로 되어 있다.
+**async**는 Angular testing utilities에서 제공하는 함수로 해당 테스트 케이스를 **async test zone**에서 실행해주어, 비동기적으로 만들어 준다. 
+
+아래 두개의 테스트케이스들은 동일한 내용을 확인한다. 두개의 테스트 케이스 모두 getQuote가 반환하는 promise가 resolve되는 것을 기다린 후 quote 내용이 표시되는 것을 확인해야한다. 
+
+##### whenStable
+첫번째 테스트 케이스는  **whenStable**메서드를 호출하고 있다. **whenStable**는 또 다른 promise를 반환하는데, 반환된 promise는 해당 테스트 케이스내에서 보류(pending)되어 있는 비동기 활동들이 완료(resolve)될때 resolve 된다. **whenStable**가 반환한 promise내에서 quote를 확인하면 된다.
+
+```
+// asynchronous test
+  it('shoud show quote after getQuote promise (async)', async(() => {
+      fixture.detectChanges();
+
+      fixture.whenStable()
+      .then(() => { // wait for async getQuote
+        fixture.detectChanges(); // update view the quote
+        expect(el.textContent).toBe(testQuote);
+      });
+  }));
+```
+
+##### fakeAsync
+**fakeAsync**를 사용하면 whenStable과는 달리, fakeAsync test zone에서 실행되는 synchronous한 코드 스타일로 작성할 수 있다.
+whenStable을 대체하기 위해선 **tick**함수를 호출하면 된다. **tick**함수는 **fakeAsync**내에서 사용해야 한다. **tick**함수는 보류(pending)되어 있는 비동기 활동들이 끝날때까지 지연시키는 역활을 한다.
+코드 흐름을 파악하기 쉬운 장점이 있지만, fakeAsync내에서는 **XHR**을 호출할 수는 없다. 
+
+```
+  // asynchronous test
+  it('shoud show quote after getQuote promise (fakeAsync)', fakeAsync(() => {
+    fixture.detectChanges();
+    tick(); // wait for async getQuote
+    fixture.detectChanges();
+    expect(el.textContent).toBe(testQuote);
+  }));
+```
+
+#### jasmine done
+만약 jasmine에 익숙하다면, 아래의 코드와 같이 jasmine이 제공하는 **done**으로도 비동기 테스트를 할 수 있는 것을 알 수 있을 것이다. 
+그리고 ```intervalTimer```을 포함하는 코드를 테스트 하는 경우, ```async```, ```fakeAsync```를 사용할 수 없는데, 이럴때 **done**을 사용하여 처리하면 된다. 
+
+```
+it('should show quote after getQuote promise (done)', done => {
+	fixture.detectChanges();
+
+	// get the spy promise and wait for it to resolve
+	spy.calls.mostRecent().returnValue.then(() => {
+  	fixture.detectChanges(); // update view the quote
+  	expect(el.textContent).toBe(testQuote);
+
+  	done();
+});
+```
+
+###### src/app/shared/twain.service.ts
+아래의 서비스 코드는 http로 요청을 보내고 응답을 Promise로 변환하는 예제 코드이다. 요청 주소를 보면 알겠지만 예제 용 코드이다. 
+```
+import { Injectable } from '@angular/core';
+import { Http} from  '@angular/http';
+import 'rxjs/add/operator/toPromise';
+@Injectable()
+export class TwainService {
+
+  constructor(private http: Http) { }
+
+  getQuote(): Promise<string> {
+    console.log('twain.service getQuote is called');
+    return this.http.get('http://test.quote.com/twain')
+    .toPromise().then((response) => response.json()[1]);
+  }
+}
+
+```
+
+###### src/app/shared/twain.service.spec.ts
+아래의 코드는 twain.service를 테스트 하는 코드이다. Http를 twain.service에 inject해야 하기 때문에, TestBed module설정 시(configureTestingModule)에서 imports에 HttpModule를 설정하였다. 이렇게 하면 Http에 대한 provider가 설정된다. HttpModule을 imports에 선언하지 않으면 **No Provider for Http**라는 에러를 보게 될 것이다. 
+```
+/* tslint:disable:no-unused-variable */
+
+import { TestBed, async, inject } from '@angular/core/testing';
+import { TwainService } from './twain.service';
+import { HttpModule } from  '@angular/http';
+
+describe('TwainService', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [HttpModule],
+      providers: [TwainService]
+    });
+  });
+
+  it('should ...', inject([TwainService], (service: TwainService) => {
+    expect(service).toBeTruthy();
+  }));
+});
+```
 
 
 ## Isolated Unit test 

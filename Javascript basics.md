@@ -187,3 +187,22 @@ Javascript에서의 정확한 동치 비교 알고리즘을 알고 싶다면 아
 
 * [The Abstract Equality Comparison Algorithm](http://www.ecma-international.org/ecma-262/5.1/#sec-11.9.3)
 
+### Function Scope
+#### var
+함수내에서 var 키워드를 사용하여 선언된 변수는 해당 함수내로 scope이 정해지고, 특정 함수내에서가 아닌 밖에서 선언된 변수는 전역 변수로 사용할 수 있다. 
+
+#### Hoisting
+Hoisting을 번역하면 끌어올리기정도로 번역할 수 있는데, 왜 번역된 단어를 말하는지는 아래를 보면 알 수 있다. Javascript에서는 변수를 한번 선언하고 난 다음에, 다시 변수를 선언할 수 있다. 그러면 다시 선언된 변수는 위에서 선언된 변수로 끌어 올려진다. 즉, 이미 위에서 선언된 값을 사용하게 된다. 
+
+```
+var x = 5;
+console.log('x is '+ x); 
+//... do something else
+
+var x;
+console.log('x is '+ x); 
+```
+
+[Hoisting에 대해 좋은 글](http://chanlee.github.io/2013/12/10/javascript-variable-scope-and-hoisting/)
+
+
